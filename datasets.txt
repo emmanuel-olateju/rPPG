@@ -1,1 +1,3 @@
-https://ieee-dataport.org/documents/mpsc-rppg-dataset#files
+https://ieee-dataport.org/documents/mpsc-rppg-dataset#files (needs IEEE)
+https://github.com/McJackTang/MMPD_rPPG_dataset?tab=readme-ov-file (Needs permission mail)
+https://zenodo.org/records/5590603/files/MIMIC-III_ppg_dataset.h5  (Download 29.7)
