@@ -1,5 +1,23 @@
+import copy
 import cv2
 import numpy as np
+from scipy.ndimage import median_filter
+from scipy.signal import butter, lfilter
+from scipy.signal import welch
+
+face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+
+def butter_bandpass(lowcut, highcut, fs, order=4):
+    nyquist = 0.5 * fs  # Nyquist frequency is half the sampling rate
+    low = lowcut / nyquist
+    high = highcut / nyquist
+    b, a = butter(order, [low, high], btype='band')
+    return b, a
+
+def butter_bandpass_filter(data, lowcut, highcut, fs, order=4):
+    b, a = butter_bandpass(lowcut, highcut, fs, order=order)
+    y = lfilter(b, a, data)
+    return y
 
 # FRESOLUTION STANDARDIZATION
 def resize_frame(frame, target_width, target_height):
@@ -33,7 +51,7 @@ def normalize_intensity(frame):
     return frame/255.0
 
 # LENS DISTORTION CORRECTION
-def correct_lens_distoetion(frame, camera_matrix, dist_coeffs):
+def correct_lens_distortion(frame, camera_matrix, dist_coeffs):
     return cv2.undistort(frame, camera_matrix, dist_coeffs, None, camera_matrix)
 
 # CAMERA CALIBRATION
@@ -53,7 +71,7 @@ def calibrate_camera(frames, pattern_size):
     ret, camera_matrix, dist_coeffs, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, gray.shape[::-1], None, None)
     return camera_matrix, dist_coeffs
 
-class VideoStandardizationPipeline:
+class StandardizeFrame:
 
     def __init__(self, target_resolution, target_frame_rate, target_color_space, pattern_size=(9,6)):
 
@@ -74,9 +92,6 @@ class VideoStandardizationPipeline:
         # CONVERT COLORSPACE
         frames = [convert_color_space(frame,self.target_color_space) for frame in frames]
 
-        # ADJUST DYNAMIC RANGE
-        frames = [adjust_dynamic_range(frame) for frame in frames]
-
         # INTENSITY NORMALIZATION
         frames = [normalize_intensity(frame) for frame in frames]
 
@@ -84,3 +99,129 @@ class VideoStandardizationPipeline:
     
     def calibrate(self, calibration_frames):
         self.camera_matrix, self.dist_coefs = calibrate_camera(calibration_frames, self.pattern_size)
+
+def detect_faces(frame, face_cascade_=face_cascade):
+    gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    faces = face_cascade_.detectMultiScale(gray_frame, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30), flags=cv2.CASCADE_SCALE_IMAGE)
+    return faces
+    
+def hsv_extraction(frame):
+    frame_copy = frame.copy()
+    frame_copy = convert_color_space(frame_copy)
+    return cv2.cvtColor(frame_copy, cv2.COLOR_RGB2HSV)
+    
+def skin_params(alpha,frame,filter_size):
+    s_values = frame[:,:,1].flatten()
+    hist, s_values = np.histogram(s_values)
+    hist = median_filter(hist,size=filter_size)
+    hist_max = s_values[np.argmax(hist)]
+    THrange = alpha*hist_max
+    return hist_max, THrange
+
+def extract_skin(alpha,frame,hsv_frame,filter_size=3):
+    hist_max, THrange = skin_params(alpha,hsv_frame,filter_size)
+    indices_lesser = np.where(hsv_frame[:,:,1]<(hist_max-int(0.5*THrange)))
+    frame[indices_lesser[0],indices_lesser[1],:] -= (frame[indices_lesser[0],indices_lesser[1],:]*0.8).astype(np.uint8)
+    indices_greater = np.where(hsv_frame[:,:,1]>(hist_max+int(0.5*THrange)))
+    frame[indices_greater[0],indices_greater[1],:] -= (frame[indices_greater[0],indices_greater[1],:]*0.8).astype(np.uint8)
+    return frame, len(indices_lesser[0])+len(indices_greater[0])
+
+class FaceDetection:
+
+    def __init__(self):
+        pass
+
+    def extract(self,frames):
+
+        # DETECT FACE
+        faces = [detect_faces(frame) for frame in frames]
+                
+        return faces, frames
+    
+class PPGIcomputation:
+
+    def __init__(self,alpha,filter_size,target_frame_size=(640,480)):
+        self.alpha = alpha
+        self.filter_size = filter_size
+        self.target_width = self.W = target_frame_size[0]
+        self.target_height = self.H = target_frame_size[1]
+
+    def extract_face(self,frames):
+
+        # CONVERT FROM RGB TO HSV
+        hsv_frames = []
+        for frame in frames:
+            hsv_frames.append(hsv_extraction(frame))
+            assert not np.array_equal(frame, hsv_frames[-1])
+
+        # EXTRACT FACIAL SKIN ALONE
+        facial_frames = []
+        Ck_s = []
+        for frame,hsv_frame in zip(frames,hsv_frames):
+            facial_frame, ck = extract_skin(self.alpha,frame,hsv_frame,self.filter_size)
+            facial_frames.append(facial_frame)
+            Ck_s.append(ck)
+
+        return facial_frames, Ck_s
+    
+    def compute_ppgi(self,frames,Ck_s):
+
+        # COMPUTE AVERAGE PIXEL VALUE
+        frames_pixels_average = []
+        for frame, ck in zip(frames,Ck_s):
+            frame_pixel_average = np.sum(np.sum(frame,axis=1),axis=0)/((self.W*self.H) - ck)
+            frames_pixels_average.append(frame_pixel_average)
+
+        return frames_pixels_average
+    
+    def compute_ppg(self,frames_pixels_average):
+        
+        P = frames_pixels_average
+        R = P[:,0]
+        G = P[:,1]
+        B = P[:,2]
+
+        X = 3*R - 2*G
+        Y = 1.5*R - G -1.5*B
+        
+        beta = np.std(X)/np.std(Y)
+
+        S = X - beta*Y
+
+        return S
+    
+class HRcompute:
+
+    def __init__(self,lowcut,highcut,filter_order,frame_rate=30):
+        self.lowcut = lowcut
+        self.highcut = highcut
+        self.filter_order = filter_order
+        self.fs = frame_rate
+
+    def compute(self,ppg):
+
+        ppg = butter_bandpass_filter(ppg, self.lowcut, self.highcut, self.fs, order=self.filter_order)
+
+        segment_length = int(len(ppg)/8)
+        segments = []
+        for i in range(7):
+            segment = ppg[i*segment_length:((i+1)*segment_length)+int(segment_length/2)]
+            window = np.hamming(len(segment))
+            segment = window*segment
+            segments.append(segment)
+        segment = ppg[7*segment_length:]
+        window = np.hamming(len(segment))
+        segment = window*segment
+        segments.append(segment)
+
+        segments_psd = []
+        for segment in segments:
+            frequencies, psd = welch(segment, fs=self.fs, window='hamming')
+            segments_psd.append((frequencies,psd))
+
+        fh = 0
+        for psd in segments_psd:
+            fh += psd[0][np.argmax(psd[1])]*60
+        heart_rate = fh/len(segments_psd)
+
+        return ppg, segments, segments_psd, heart_rate
