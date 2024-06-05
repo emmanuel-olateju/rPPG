@@ -25,17 +25,26 @@ def resize_frame(frame, target_width, target_height):
 
 # FRAMERATE STANDARDIZATION
 def interpolate_frames(frames, target_frame_rate, current_frame_rate=1):
-    if (target_frame_rate/current_frame_rate)==target_frame_rate:
-        ratio = target_frame_rate/current_frame_rate
+    ratio = target_frame_rate / current_frame_rate
+    if ratio > 1:
+        # Increase the frame rate by interpolating frames
         interpolated_frames = []
-        for i in range(len(frames)-1):
+        for i in range(len(frames) - 1):
             interpolated_frames.append(frames[i])
             for j in range(1, int(ratio)):
-                interpolated_frame = cv2.addWeighted(frames[i], 1 - j/ratio, frames[i+1], j/ratio, 0)
+                interpolated_frame = cv2.addWeighted(frames[i], 1 - j / ratio, frames[i + 1], j / ratio, 0)
                 interpolated_frames.append(interpolated_frame)
         interpolated_frames.append(frames[-1])
         return interpolated_frames
+    elif ratio < 1:
+        # Decrease the frame rate by selecting a subset of frames
+        reduced_frames = []
+        step = int(1 / ratio)
+        for i in range(0, len(frames), step):
+            reduced_frames.append(frames[i])
+        return reduced_frames
     else:
+        # If the ratio is 1, return the original frames
         return frames
 
 # CONVERT COLOR SPACE
@@ -89,8 +98,8 @@ class StandardizeFrame:
         # FRAMERATE STANDARDIZATION
         frames = interpolate_frames(frames, self.target_frame_rate, current_frame_rate=current_frame_rate)
 
-        # CONVERT COLORSPACE
-        frames = [convert_color_space(frame,self.target_color_space) for frame in frames]
+        # # CONVERT COLORSPACE
+        # frames = [convert_color_space(frame,self.target_color_space) for frame in frames]
 
         # INTENSITY NORMALIZATION
         frames = [normalize_intensity(frame) for frame in frames]
