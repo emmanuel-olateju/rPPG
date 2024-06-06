@@ -234,3 +234,21 @@ class HRcompute:
         heart_rate = fh/len(segments_psd)
 
         return ppg, segments, segments_psd, heart_rate
+    
+class HRcompute2:
+
+    def __init__(self,lowcut,highcut,filter_order,frame_rate=30):
+        self.lowcut = lowcut
+        self.highcut = highcut
+        self.filter_order = filter_order
+        self.fs = frame_rate
+
+    def compute(self,ppg):
+
+        ppg = butter_bandpass_filter(ppg, self.lowcut, self.highcut, self.fs, order=self.filter_order)
+        window = np.hamming(len(ppg))
+        ppg = window*ppg
+        frequencies, psd = welch(ppg, fs=self.fs, window='hamming')
+        heart_rate = frequencies[np.argmax(psd)]*60
+
+        return heart_rate
