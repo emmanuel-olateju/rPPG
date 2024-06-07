@@ -178,7 +178,7 @@ class PPGIcomputation:
         # COMPUTE AVERAGE PIXEL VALUE
         frames_pixels_average = []
         for frame, ck in zip(frames,Ck_s):
-            frame_pixel_average = np.sum(np.sum(frame,axis=1),axis=0)/((self.W*self.H) - ck)
+            frame_pixel_average = np.sum(np.sum(frame,axis=1),axis=0)/(((self.W*self.H) - ck)+1E-2)
             frames_pixels_average.append(frame_pixel_average)
 
         return frames_pixels_average
