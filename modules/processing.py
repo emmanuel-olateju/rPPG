@@ -255,7 +255,7 @@ class HRcompute2:
         return heart_rate
 
 
-class ini_HRcompute:
+class ibi_HRcompute:
 
     def __init__(self,lowcut,highcut,filter_order,frame_rate=30):
         self.lowcut = lowcut
@@ -278,6 +278,9 @@ class ini_HRcompute:
 
         # Compute heart rate
         beat_to_beat_interval = np.diff(peaks) / self.fs
-        heart_rate = 60 / (np.mean(beat_to_beat_interval)+1)
+        heart_rate = 60 / (np.mean(beat_to_beat_interval)+0.001)
+
+        if np.isnan(heart_rate):
+            print(peaks,beat_to_beat_interval)
 
         return heart_rate
