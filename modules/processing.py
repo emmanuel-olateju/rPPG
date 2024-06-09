@@ -253,6 +253,15 @@ class HRcompute2:
         psd = psd/psd.sum()
         heart_rate = (psd.dot(frequencies))*60
         return heart_rate
+    
+    def get_psd(self,ppg):
+        
+        ppg = butter_bandpass_filter(ppg, self.lowcut, self.highcut, self.fs, order=self.filter_order)
+        window = np.hamming(len(ppg))
+        ppg = window*ppg
+        frequencies, psd = welch(ppg, fs=self.fs, window='hamming')
+
+        return frequencies, psd
 
 
 class ibi_HRcompute:
