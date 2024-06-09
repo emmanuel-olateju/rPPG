@@ -274,7 +274,13 @@ class ibi_HRcompute:
 
         # Compute peak locations
         ppg = (ppg-ppg.min())/(ppg.max()-ppg.min())
-        peaks, _ = find_peaks(ppg, height=0.5)
+        peaks, _ = find_peaks(ppg, height=0.5*ppg.max())
+
+        # if len(peaks<=1):
+        #     if len(peaks)==1:
+        #         peaks = np.append(peaks,peaks[0])
+        #     else:
+        #         peaks = np.append(peaks,)
 
         # Compute heart rate
         beat_to_beat_interval = np.diff(peaks) / self.fs
