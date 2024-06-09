@@ -4,6 +4,7 @@ import numpy as np
 from scipy.ndimage import median_filter
 from scipy.signal import butter, lfilter
 from scipy.signal import welch
+from scipy.signal import butter, find_peaks
 
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
@@ -250,5 +251,33 @@ class HRcompute2:
         ppg = window*ppg
         frequencies, psd = welch(ppg, fs=self.fs, window='hamming')
         heart_rate = frequencies[np.argmax(psd)]*60
+
+        return heart_rate
+
+
+class ini_HRcompute:
+
+    def __init__(self,lowcut,highcut,filter_order,frame_rate=30):
+        self.lowcut = lowcut
+        self.highcut = highcut
+        self.filter_order = filter_order
+        self.fs = frame_rate
+
+    def compute(self,ppg):
+        ppg = butter_bandpass_filter(ppg, self.lowcut, self.highcut, self.fs, order=self.filter_order)
+        
+        ppg = butter_bandpass_filter(
+            ppg,
+            self.lowcut, self.highcut,
+            self.fs, self.filter_order
+        )
+
+        # Compute peak locations
+        ppg = (ppg-ppg.min())/(ppg.max()-ppg.min())
+        peaks, _ = find_peaks(ppg, height=0.5)
+
+        # Compute heart rate
+        beat_to_beat_interval = np.diff(peaks) / self.fs
+        heart_rate = 60 / (np.mean(beat_to_beat_interval)+1)
 
         return heart_rate
