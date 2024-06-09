@@ -250,10 +250,6 @@ class HRcompute2:
         window = np.hamming(len(ppg))
         ppg = window*ppg
         frequencies, psd = welch(ppg, fs=self.fs, window='hamming')
-        peaks, _ = find_peaks(psd, height=0.7*psd.max())
-        psd = (psd-psd.min())/(psd.max()-psd.min())
-        frequencies = frequencies[peaks]
-        psd = psd[peaks]
         psd = psd/psd.sum()
         heart_rate = (psd.dot(frequencies))*60
 
