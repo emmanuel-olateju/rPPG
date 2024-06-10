@@ -263,6 +263,10 @@ class HRcompute2:
 
         return frequencies, psd
 
+    def compute_from_psd(self, frequencies, psd):
+        psd = psd/psd.sum()
+        heart_rate = (psd.dot(frequencies))*60
+        return heart_rate
 
 class ibi_HRcompute:
 
