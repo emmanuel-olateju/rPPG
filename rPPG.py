@@ -17,12 +17,19 @@ frame_standardization = processing.StandardizeFrame(
     target_color_space=cv2.COLOR_BGR2RGB)
 
 face_detect = processing.FaceDetection()
-ppgi = processing.PPGIcomputation(alpha=0.5,filter_size=CONFIG["MEDIAN_FILTER_SIZE"],target_frame_size=CONFIG["TARGET_RESOLUTION"])
-HR = processing.HRcompute2(
+ppgi = processing.PPGIcomputation(alpha=0.1,filter_size=CONFIG["MEDIAN_FILTER_SIZE"],target_frame_size=CONFIG["TARGET_RESOLUTION"])
+HR = processing.HRcompute(
     CONFIG["BPF_LOWCUT"],
     CONFIG["BPF_HIGHCUT"],
     CONFIG["BPF_ORDER"],
-    CONFIG["TARGET_FRAME_RATE"])
+    CONFIG["TARGET_FRAME_RATE"]
+)
+ibi_HR = processing.ibi_HRcompute(
+    CONFIG["BPF_LOWCUT"],
+    CONFIG["BPF_HIGHCUT"],
+    CONFIG["BPF_ORDER"],
+    CONFIG["TARGET_FRAME_RATE"]
+)
 
 def record():
 
@@ -37,31 +44,7 @@ def record():
     if not cap.isOpened():
         print("Error: Could not open video capture")
         return
-    
-    # while True:
-    #     ''' TEST FACE IS DETECTED '''
 
-    #     # Capture frame-by-frame
-    #     ret, frame = cap.read()
-    #     if not ret:
-    #         break
-        
-    #     # Detect Face
-    #     faces, frame = face_detect.extract([frame])
-    #     frame = frame[0]
-    #     face = faces[0]
-
-    #     for (x, y, w, h) in face:
-    #         cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
-
-    #     cv2.imshow("Video Stream", frame)
-
-    #     # Break the loop on "q" key press
-    #     if cv2.waitKey(1) & 0xFF == ord("n"):
-    #         break
-    # cap.release()
-    # cv2.destroyAllWindows()
-    
 
     # Initialize Video Capture
     cap = cv2.VideoCapture(0)
@@ -102,7 +85,7 @@ def record():
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
 
-        if len(frames)==int(1*CAMERA_FPS):
+        if len(frames)==int(3*CAMERA_FPS):
 
             ''' STANDARDIZE FRAME '''
             frames = frame_standardization.standardize(frames,current_frame_rate=CAMERA_FPS)
@@ -117,22 +100,22 @@ def record():
             ppg_signal = (ppg_signal-ppg_signal.mean())/ppg_signal.std()
 
             ''' COMPUTE PSD & HR'''
-            frequencies, psd = HR.get_psd(ppg_signal)
-            psd = (psd-psd.min())/(psd.max()-psd.min())
-            psd = np.vstack((frequencies, psd))
-            psd = np.expand_dims(psd, axis=0).astype(np.float32)
-            psd = torch.tensor(psd)
-            est_psd = model(psd).detach().numpy()
-            est_psd = np.squeeze(est_psd,axis=0)
-            hr = round(HR.compute_from_psd(frequencies, est_psd), ndigits=None)
+            # frequencies, psd = HR.get_psd(ppg_signal)
+            # psd = (psd-psd.min())/(psd.max()-psd.min())
+            # psd = np.vstack((frequencies, psd))
+            # psd = np.expand_dims(psd, axis=0).astype(np.float32)
+            # psd = torch.tensor(psd)
+            # est_psd = model(psd).detach().numpy()
+            # est_psd = np.squeeze(est_psd,axis=0)
+            # hr = round(HR.compute_from_psd(frequencies, est_psd), ndigits=None)
             frames = []
-            hr_ = round(HR.compute(ppg_signal), ndigits=None)
+            hr_ = round(HR.compute(ppg_signal), ndigits=2)
             # heart_rate = round(0.3*hr + 0.7*hr_, ndigits=None)
             heart_rates.append(hr_)
-            heart_rate = round(sum(heart_rates)/len(heart_rates), ndigits=2)
             if len(heart_rates) > 5:
-                heart_rates = []
-            print(f"HEART RATE: {heart_rate}bpm | PSD_HR: {hr}bpm | HSV_HR: {hr_}")
+                _ = heart_rates.pop(0)
+            heart_rate = round(sum(heart_rates)/len(heart_rates), ndigits=2)
+            print(f"HEART RATE: {heart_rate}bpm | PSD:HR: {hr_}bpm")
 
     
     # Release the capture when everythin is done

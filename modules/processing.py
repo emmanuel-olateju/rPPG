@@ -104,8 +104,8 @@ class StandardizeFrame:
         frames = [((frame-frame.min())/(frame.max()-frame.min()))*255 for frame in frames]
         frames = [frame.astype("uint8") for frame in frames]
 
-        # # CONVERT COLORSPACE
-        # frames = [convert_color_space(frame,self.target_color_space) for frame in frames]
+        # CONVERT COLORSPACE
+        frames = [convert_color_space(frame,self.target_color_space) for frame in frames]
 
         # INTENSITY NORMALIZATION
         frames = [normalize_intensity(frame) for frame in frames]
@@ -203,46 +203,11 @@ class PPGIcomputation:
         beta = np.std(X)/np.std(Y)
 
         S = X - beta*Y
+        S = 0.7*S + 0.3*((G/R)+(G/B))
 
         return S
     
 class HRcompute:
-
-    def __init__(self,lowcut,highcut,filter_order,frame_rate=30):
-        self.lowcut = lowcut
-        self.highcut = highcut
-        self.filter_order = filter_order
-        self.fs = frame_rate
-
-    def compute(self,ppg):
-
-        ppg = butter_bandpass_filter(ppg, self.lowcut, self.highcut, self.fs, order=self.filter_order)
-
-        segment_length = int(len(ppg)/8)
-        segments = []
-        for i in range(7):
-            segment = ppg[i*segment_length:((i+1)*segment_length)+int(segment_length/2)]
-            window = np.hamming(len(segment))
-            segment = window*segment
-            segments.append(segment)
-        segment = ppg[7*segment_length:]
-        window = np.hamming(len(segment))
-        segment = window*segment
-        segments.append(segment)
-
-        segments_psd = []
-        for segment in segments:
-            frequencies, psd = welch(segment, fs=self.fs, window='hamming')
-            segments_psd.append((frequencies,psd))
-
-        fh = 0
-        for psd in segments_psd:
-            fh += psd[0][np.argmax(psd[1])]*60
-        heart_rate = fh/len(segments_psd)
-
-        return ppg, segments, segments_psd, heart_rate
-    
-class HRcompute2:
 
     def __init__(self,lowcut,highcut,filter_order,frame_rate=30):
         self.lowcut = lowcut
@@ -295,13 +260,6 @@ class ibi_HRcompute:
         ppg = (ppg-ppg.min())/(ppg.max()-ppg.min())
         peaks, _ = find_peaks(ppg, height=0.5*ppg.max())
 
-        # if len(peaks<=1):
-        #     if len(peaks)==1:
-        #         peaks = np.append(peaks,peaks[0])
-        #     else:
-        #         peaks = np.append(peaks,)
-
-        # Compute heart rate
         beat_to_beat_interval = np.diff(peaks) / self.fs
         heart_rate = 60 / (np.mean(beat_to_beat_interval)+0.001)
 
