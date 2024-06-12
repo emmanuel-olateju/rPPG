@@ -38,29 +38,30 @@ def record():
         print("Error: Could not open video capture")
         return
     
-    while True:
-        ''' TEST FACE IS DETECTED '''
+    # while True:
+    #     ''' TEST FACE IS DETECTED '''
 
-        # Capture frame-by-frame
-        ret, frame = cap.read()
-        if not ret:
-            break
+    #     # Capture frame-by-frame
+    #     ret, frame = cap.read()
+    #     if not ret:
+    #         break
         
-        # Detect Face
-        faces, frame = face_detect.extract([frame])
-        frame = frame[0]
-        face = faces[0]
+    #     # Detect Face
+    #     faces, frame = face_detect.extract([frame])
+    #     frame = frame[0]
+    #     face = faces[0]
 
-        for (x, y, w, h) in face:
-            cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
+    #     for (x, y, w, h) in face:
+    #         cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
 
-        cv2.imshow("Video Stream", frame)
+    #     cv2.imshow("Video Stream", frame)
 
-        # Break the loop on "q" key press
-        if cv2.waitKey(1) & 0xFF == ord("n"):
-            break
-    cap.release()
-    cv2.destroyAllWindows()
+    #     # Break the loop on "q" key press
+    #     if cv2.waitKey(1) & 0xFF == ord("n"):
+    #         break
+    # cap.release()
+    # cv2.destroyAllWindows()
+    
 
     # Initialize Video Capture
     cap = cv2.VideoCapture(0)
@@ -126,8 +127,8 @@ def record():
             hr = round(HR.compute_from_psd(frequencies, est_psd), ndigits=None)
             frames = []
             hr_ = round(HR.compute(ppg_signal), ndigits=None)
-            heart_rate = round(0.3*hr + 0.7*hr_, ndigits=None)
-            heart_rates.append(heart_rate)
+            # heart_rate = round(0.3*hr + 0.7*hr_, ndigits=None)
+            heart_rates.append(hr_)
             heart_rate = round(sum(heart_rates)/len(heart_rates), ndigits=2)
             if len(heart_rates) > 5:
                 heart_rates = []
