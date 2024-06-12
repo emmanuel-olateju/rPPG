@@ -17,7 +17,7 @@ frame_standardization = processing.StandardizeFrame(
     target_color_space=cv2.COLOR_BGR2RGB)
 
 face_detect = processing.FaceDetection()
-ppgi = processing.PPGIcomputation(alpha=0.1,filter_size=CONFIG["MEDIAN_FILTER_SIZE"],target_frame_size=CONFIG["TARGET_RESOLUTION"])
+ppgi = processing.PPGIcomputation(alpha=0.5,filter_size=CONFIG["MEDIAN_FILTER_SIZE"],target_frame_size=CONFIG["TARGET_RESOLUTION"])
 HR = processing.HRcompute(
     CONFIG["BPF_LOWCUT"],
     CONFIG["BPF_HIGHCUT"],
@@ -85,7 +85,7 @@ def record():
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
 
-        if len(frames)==int(3*CAMERA_FPS):
+        if len(frames)==int(4*CAMERA_FPS):
 
             ''' STANDARDIZE FRAME '''
             frames = frame_standardization.standardize(frames,current_frame_rate=CAMERA_FPS)
@@ -93,8 +93,8 @@ def record():
             frame = [frame.astype("uint8") for frame in frames]
 
             ''' EXTRACT PPG SIGNAL '''
-            skin_frames, cks = ppgi.extract_face(frames)
-            ppgi_signal = ppgi.compute_ppgi(skin_frames,cks)
+            # skin_frames, cks = ppgi.extract_face(frames)
+            ppgi_signal = ppgi.compute_ppgi(frames,[0]*len(frames))
             ppg_signal = ppgi.compute_ppg(np.array(ppgi_signal))
             ppg_signal = processing.butter_bandpass_filter(ppg_signal, 0.4, 4, 30, order=4)
             ppg_signal = (ppg_signal-ppg_signal.mean())/ppg_signal.std()

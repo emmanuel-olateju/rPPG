@@ -104,8 +104,8 @@ class StandardizeFrame:
         frames = [((frame-frame.min())/(frame.max()-frame.min()))*255 for frame in frames]
         frames = [frame.astype("uint8") for frame in frames]
 
-        # CONVERT COLORSPACE
-        frames = [convert_color_space(frame,self.target_color_space) for frame in frames]
+        # # CONVERT COLORSPACE
+        # frames = [convert_color_space(frame,self.target_color_space) for frame in frames]
 
         # INTENSITY NORMALIZATION
         frames = [normalize_intensity(frame) for frame in frames]
@@ -203,7 +203,7 @@ class PPGIcomputation:
         beta = np.std(X)/np.std(Y)
 
         S = X - beta*Y
-        S = 0.7*S + 0.3*((G/R)+(G/B))
+        S = 0.3*S + 0.7*((G/R)+(G/B))
 
         return S
     
