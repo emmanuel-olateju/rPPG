@@ -6,7 +6,7 @@ from scipy.signal import butter, lfilter
 from scipy.signal import welch
 from scipy.signal import butter, find_peaks
 
-face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+face_cascade = cv2.CascadeClassifier("artifacts/haarcascade_frontalface_default.xml")
 
 def butter_bandpass(lowcut, highcut, fs, order=4):
     nyquist = 0.5 * fs  # Nyquist frequency is half the sampling rate
@@ -23,7 +23,7 @@ def butter_bandpass_filter(data, lowcut, highcut, fs, order=4):
 # FRESOLUTION STANDARDIZATION
 def resize_frame(frame, target_width, target_height):
     if frame is None or frame.size == 0:
-        return np.randn((target_width, target_height,3))
+        return np.random.randn(target_width, target_height,3)
     else:
         return cv2.resize(frame, (target_width,target_height), interpolation=cv2.INTER_LINEAR)
 
@@ -104,8 +104,8 @@ class StandardizeFrame:
         frames = [((frame-frame.min())/(frame.max()-frame.min()))*255 for frame in frames]
         frames = [frame.astype("uint8") for frame in frames]
 
-        # CONVERT COLORSPACE
-        frames = [convert_color_space(frame,self.target_color_space) for frame in frames]
+        # # CONVERT COLORSPACE
+        # frames = [convert_color_space(frame,self.target_color_space) for frame in frames]
 
         # INTENSITY NORMALIZATION
         frames = [normalize_intensity(frame) for frame in frames]
