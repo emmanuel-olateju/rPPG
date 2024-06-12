@@ -22,7 +22,10 @@ def butter_bandpass_filter(data, lowcut, highcut, fs, order=4):
 
 # FRESOLUTION STANDARDIZATION
 def resize_frame(frame, target_width, target_height):
-    return cv2.resize(frame, (target_width,target_height), interpolation=cv2.INTER_LINEAR)
+    if frame is None or frame.size == 0:
+        return np.randn((target_width, target_height,3))
+    else:
+        return cv2.resize(frame, (target_width,target_height), interpolation=cv2.INTER_LINEAR)
 
 # FRAMERATE STANDARDIZATION
 def interpolate_frames(frames, target_frame_rate, current_frame_rate=1):
@@ -98,9 +101,11 @@ class StandardizeFrame:
 
         # FRAMERATE STANDARDIZATION
         frames = interpolate_frames(frames, self.target_frame_rate, current_frame_rate=current_frame_rate)
+        frames = [((frame-frame.min())/(frame.max()-frame.min()))*255 for frame in frames]
+        frames = [frame.astype("uint8") for frame in frames]
 
-        # # CONVERT COLORSPACE
-        # frames = [convert_color_space(frame,self.target_color_space) for frame in frames]
+        # CONVERT COLORSPACE
+        frames = [convert_color_space(frame,self.target_color_space) for frame in frames]
 
         # INTENSITY NORMALIZATION
         frames = [normalize_intensity(frame) for frame in frames]
@@ -161,6 +166,7 @@ class PPGIcomputation:
         # CONVERT FROM RGB TO HSV
         hsv_frames = []
         for frame in frames:
+            frame = (((frame-frame.min())/(frame.max()-frame.min()))*255).astype("uint8")
             hsv_frames.append(hsv_extraction(frame))
             assert not np.array_equal(frame, hsv_frames[-1])
 
@@ -300,6 +306,6 @@ class ibi_HRcompute:
         heart_rate = 60 / (np.mean(beat_to_beat_interval)+0.001)
 
         if np.isnan(heart_rate):
-            print(peaks,beat_to_beat_interval)
+            heart_rate = 0
 
         return heart_rate
