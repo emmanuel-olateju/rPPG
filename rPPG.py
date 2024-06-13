@@ -108,22 +108,20 @@ def record():
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
 
-        if len(frames)==int(4*CAMERA_FPS):
+        if len(frames)==int(8*CAMERA_FPS):
 
             rois = np.array(rois)
 
-            ''' STANDARDIZE FRAME '''
+            # skin_frames, cks = ppgi.extract_face(frames)
             frames = frame_standardization.standardize(frames,current_frame_rate=CAMERA_FPS)
             frames = [((frame-frame.min())/(frame.max()-frame.min()))*255 for frame in frames]
             frame = [frame.astype("uint8") for frame in frames]
-
-            ''' EXTRACT PPG SIGNAL '''
-            # skin_frames, cks = ppgi.extract_face(frames)
             ppgi_signal = ppgi.compute_ppgi(frames,[0]*len(frames))
+            
             if len(frames) == len(rois):
-                ppg_signal_1 = ppgi.compute_ppg(np.array(ppgi_signal))
+                ppg_signal_1 = ppg_signal = ppgi.compute_ppg(np.array(ppgi_signal))
                 ppg_signal_2 = ppgi.compute_ppg(rois)
-                ppg_signal = 0.3*ppg_signal_1 + 0.7*ppg_signal_2
+                ppg_signal = 0.1*ppg_signal_2 + 0.9*ppg_signal_1
             else:
                 ppg_signal = ppgi.compute_ppg(np.array(ppgi_signal))
             ppg_signal = processing.butter_bandpass_filter(ppg_signal, 0.4, 4, 30, order=4)

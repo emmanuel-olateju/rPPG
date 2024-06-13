@@ -203,9 +203,10 @@ class PPGIcomputation:
         beta = np.std(X)/np.std(Y)
 
         S = X - beta*Y
-        S = 0.3*S + 0.7*((G/R)+(G/B))
+        SGRGB = ((G/R)+(G/B))
+        # S = 0.3*S + 0.7*SGRGB
 
-        return S
+        return SGRGB
     
 class HRcompute:
 
