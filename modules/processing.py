@@ -222,6 +222,9 @@ class HRcompute:
         window = np.hamming(len(ppg))
         ppg = window*ppg
         frequencies, psd = welch(ppg, fs=self.fs, window='hamming')
+        indices = np.where(psd>=0.5*psd)
+        frequencies = frequencies[indices]
+        psd = psd[indices]
         psd = psd/psd.sum()
         heart_rate = (psd.dot(frequencies))*60
         return heart_rate
