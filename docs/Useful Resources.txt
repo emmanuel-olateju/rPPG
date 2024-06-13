@@ -4,3 +4,5 @@ https://research.tue.nl/en/datasets/public-benchmark-dataset-for-testing-rppg-al
 https://github.com/ubicomplab/rPPG-Toolbox/tree/main/dataset
 https://github.com/yangze68/BH-rPPG-dataset
 https://github.com/danmcduff/scampsdataset?tab=readme-ov-file
+https://github.com/partofthestars/LGI-PPGI-DB
+https://github.com/phuselab/pyVHR
