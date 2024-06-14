@@ -2,23 +2,8 @@ import copy
 import cv2
 import numpy as np
 from scipy.ndimage import median_filter
-from scipy.signal import butter, lfilter
 from scipy.signal import welch
-from scipy.signal import butter, find_peaks
-
-face_cascade = cv2.CascadeClassifier("artifacts/haarcascade_frontalface_default.xml")
-
-def butter_bandpass(lowcut, highcut, fs, order=4):
-    nyquist = 0.5 * fs  # Nyquist frequency is half the sampling rate
-    low = lowcut / nyquist
-    high = highcut / nyquist
-    b, a = butter(order, [low, high], btype='band')
-    return b, a
-
-def butter_bandpass_filter(data, lowcut, highcut, fs, order=4):
-    b, a = butter_bandpass(lowcut, highcut, fs, order=order)
-    y = lfilter(b, a, data)
-    return y
+from .filters import *
 
 # FRESOLUTION STANDARDIZATION
 def resize_frame(frame, target_width, target_height):
@@ -114,11 +99,6 @@ class StandardizeFrame:
     
     def calibrate(self, calibration_frames):
         self.camera_matrix, self.dist_coefs = calibrate_camera(calibration_frames, self.pattern_size)
-
-def detect_faces(frame, face_cascade_=face_cascade):
-    gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    faces = face_cascade_.detectMultiScale(gray_frame, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30), flags=cv2.CASCADE_SCALE_IMAGE)
-    return faces
     
 def hsv_extraction(frame):
     frame_copy = frame.copy()
@@ -140,18 +120,6 @@ def extract_skin(alpha,frame,hsv_frame,filter_size=3):
     indices_greater = np.where(hsv_frame[:,:,1]>(hist_max+int(0.5*THrange)))
     frame[indices_greater[0],indices_greater[1],:] -= (frame[indices_greater[0],indices_greater[1],:]*0.8).astype(np.uint8)
     return frame, len(indices_lesser[0])+len(indices_greater[0])
-
-class FaceDetection:
-
-    def __init__(self):
-        pass
-
-    def extract(self,frames):
-
-        # DETECT FACE
-        faces = [detect_faces(frame) for frame in frames]
-                
-        return faces, frames
     
 class PPGIcomputation:
 
@@ -185,7 +153,7 @@ class PPGIcomputation:
         # COMPUTE AVERAGE PIXEL VALUE
         frames_pixels_average = []
         for frame, ck in zip(frames,Ck_s):
-            frame_pixel_average = np.sum(np.sum(frame,axis=1),axis=0)/(((self.W*self.H) - ck)+1E-2)
+            frame_pixel_average = np.sum(np.sum(frame,axis=1),axis=0)/(((self.W*self.H) - ck)+1E-6)
             frames_pixels_average.append(frame_pixel_average)
 
         return frames_pixels_average
@@ -193,9 +161,9 @@ class PPGIcomputation:
     def compute_ppg(self,frames_pixels_average):
         
         P = frames_pixels_average
-        R = P[:,0]
+        R = P[:,2]
         G = P[:,1]
-        B = P[:,2]
+        B = P[:,0]
 
         X = 3*R - 2*G
         Y = 1.5*R - G -1.5*B
@@ -204,7 +172,7 @@ class PPGIcomputation:
 
         S = X - beta*Y
         SGRGB = ((G/R)+(G/B))
-        # S = 0.3*S + 0.7*SGRGB
+        # S_MEAN = 0.3*S + 0.7*SGRGB
 
         return SGRGB
     
@@ -222,7 +190,7 @@ class HRcompute:
         window = np.hamming(len(ppg))
         ppg = window*ppg
         frequencies, psd = welch(ppg, fs=self.fs, window='hamming')
-        indices = np.where(psd>=0.5*psd)
+        indices = np.where(psd >= (0.8*psd.max()))
         frequencies = frequencies[indices]
         psd = psd[indices]
         psd = psd/psd.sum()
