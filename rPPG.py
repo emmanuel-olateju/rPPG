@@ -28,6 +28,8 @@ lower_lip_indices = [78, 95, 88, 178, 87, 14, 317, 402, 318, 324]
 forehead_indices = [10, 338, 297, 332, 284, 251, 389, 356, 454]
 
 W = 15
+SW = 15
+HR_estimates = []
 
 def record():
 
@@ -64,14 +66,16 @@ def record():
     while True:
         
         ''' 1S FRAME DATA ACQUISITION '''
-        frames = []
-        for i in range(int(W*CAMERA_FPS)):
+        # frames = []
+        for i in range(int(W*CAMERA_FPS)-len(frames)):
             ret, frame = cap.read()
             if not ret:
-                frames = []
                 break
             else:
                 frames.append(frame)
+        
+        if not ret:
+            break
         
         if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
@@ -85,7 +89,8 @@ def record():
         face_frames = []
         left_cheek = []
         right_cheek = []
-        for frame in frames:
+        nose = []
+        for f,frame in enumerate(frames):
 
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             face_results = face_detection.process(rgb_frame)
@@ -105,12 +110,12 @@ def record():
                         box_height = int(bboxC.height * height)
                         face_frame = frame[y_min+5:(y_min+box_height)-5,x_min+5:(x_min+box_width)-5,:]
                         face_frames.append(face_frame)
+                        # if f>=int((W-SW)*CAMERA_FPS):
                         cv2.rectangle(frame, (x_min, y_min), (x_min + box_width, y_min + box_height), (255, 255, 255), 2)
                         text_x = x_min
                         text_y = y_min + box_height + 25
                         cv2.putText(frame, f"{heart_rate:.2f} BPM", (text_x, text_y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
             
-
                     results = face_mesh.process(rgb_frame)
                     if results.multi_face_landmarks:
                         for face_landmarks in results.multi_face_landmarks:
@@ -119,12 +124,17 @@ def record():
                             
                             roi_r = rppg.landmark_extraction(frame, face_landmarks, right_cheek_indices, width, height)
 
+                            roi_nose = rppg.landmark_extraction(frame, face_landmarks, nose_indices, width, height)
+
                         left_cheek.append(roi_l)
                         right_cheek.append(roi_r)
+                        nose.append(roi_nose)
 
-            cv2.imshow("Video Stream", frame)
-            if cv2.waitKey(1) & 0xFF == ord("q"):
-                break
+            if f>=int((W-SW)*CAMERA_FPS):
+                cv2.imshow("Video Stream", frame)
+                if cv2.waitKey(1) & 0xFF == ord("q"):
+                    break
+
         efs = int(W*CAMERA_FPS)
         if len(face_frames)==efs and len(left_cheek)==efs and len(right_cheek)==efs:
 
@@ -135,6 +145,7 @@ def record():
             window_length_ = 10
             poly_order_ = 5
             sigma_ = 1
+            sigma_bpm = 5
             fs_ = CAMERA_FPS
             f1, f2 = 0.75, 6
             fn = 0.1
@@ -142,26 +153,48 @@ def record():
 
             lc_ppgi = rppg.compute_landmark_ppgi(left_cheek)
             rc_ppgi = rppg.compute_landmark_ppgi(right_cheek)
+            nose_ppgi = rppg.compute_landmark_ppgi(nose)
 
             lc_ppg = rppg.ppgi_2_ppg(lc_ppgi,f1,f2,fs_,4,fn,Q)
             rc_ppg = rppg.ppgi_2_ppg(rc_ppgi,f1,f2,fs_,4,fn,Q)
+            nose_ppg = rppg.ppgi_2_ppg(nose_ppgi,f1,f2,fs_,4,fn,Q)
 
             lc_ppg = rppg.savitzky_golay(lc_ppg, window_length_, poly_order_)
             rc_ppg = rppg.savitzky_golay(rc_ppg, window_length_, poly_order_)
+            nose_ppg = rppg.savitzky_golay(nose_ppg, window_length_, poly_order_)
 
             lc_ppg = rppg.gaussian_filter(lc_ppg, sigma_)
             rc_ppg = rppg.gaussian_filter(rc_ppg, sigma_)
+            nose_ppg = rppg.gaussian_filter(nose_ppg, sigma_)
 
-            convG_ppg = np.convolve(lc_ppg, rc_ppg, mode="same")
+            convG_lr_ppg = np.convolve(lc_ppg, rc_ppg, mode="same")
+            convG_rn_ppg = np.convolve(rc_ppg, nose_ppg, mode="same")
+            convG_ln_ppg = np.convolve(lc_ppg, nose_ppg, mode="same")
 
-            l_hr = round(rppg.median_analysis(lc_ppg,fs_),2)
-            r_hr = round(rppg.median_analysis(rc_ppg,fs_),2)
-            convG_hr = round(rppg.median_analysis(convG_ppg,fs_),2)
+            alpha_ = 0.0
+            beta_ = (1-alpha_)+0.0
+            l_hr = round(alpha_*rppg.EFA(lc_ppg,fs_,sigma_bpm) + beta_*rppg.median_analysis(lc_ppg,fs_),2)
+            r_hr = round(alpha_*rppg.EFA(rc_ppg,fs_,sigma_bpm) + beta_*rppg.median_analysis(rc_ppg,fs_),2)
+            nose_hr = round(alpha_*rppg.EFA(nose_ppg,fs_,sigma_bpm) + beta_*rppg.median_analysis(nose_ppg,fs_),2)
+            convG_lr_hr = round(alpha_*rppg.EFA(convG_lr_ppg,fs_,sigma_bpm) + beta_*rppg.median_analysis(convG_lr_ppg,fs_),2)
+            convG_rn_hr = round(alpha_*rppg.EFA(convG_rn_ppg,fs_,sigma_bpm) + beta_*rppg.median_analysis(convG_rn_ppg,fs_),2)
+            convG_ln_hr = round(alpha_*rppg.EFA(convG_ln_ppg,fs_,sigma_bpm) + beta_*rppg.median_analysis(convG_ln_ppg,fs_),2)
 
+            hr = round(0.7*r_hr + 0.2*convG_lr_hr + 0.1*l_hr, 2)
+            HR_estimates.append(hr)
+            # if len(HR_estimates)<2:
+            #     HR_estimates.append(hr)
+            # else:
+            #     hr = round(sum(HR_estimates[-2:] + [hr])/3, 2)
+            #     HR_estimates.append(hr)
 
-            heart_rate = round(0.7*r_hr + 0.3*l_hr, 2)
-            print(f"HEART RATE: {heart_rate}bpm | r_hr: {r_hr}bpm | l_hr: {l_hr}bpm | convG_hr: {convG_hr}bpm")
-            print("----------------------------------------------------------------------------------------------")
+            heart_rate = HR_estimates[-1]
+            print(f"HEART RATE: {heart_rate}bpm | r_hr: {r_hr}bpm | convG_lr_hr: {convG_lr_hr}bpm | l_hr: {l_hr}bpm | nose_hr: {nose_hr}bpm | convG_rn_hr: {convG_rn_hr}bpm | convG_ln_hr: {convG_ln_hr}bpm")
+            print("----------------------------------------------------------------------------------------------------------------------------------------------------")
+        else:
+            pass
+        if SW < W:
+            frames = frames[int(SW*CAMERA_FPS):]
         else:
             frames = []
 

@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.signal import savgol_filter, find_peaks
+from scipy.signal import savgol_filter, find_peaks, welch
 from scipy.ndimage import gaussian_filter1d
 from scipy.fft import fft, ifft, fftfreq
 from . filters import butter_bandpass_filter, apply_notch_filter
@@ -38,8 +38,9 @@ def ppgi_2_ppg(ppgi, f1, f2, fs, order_, fn, Q):
 
     # S = apply_notch_filter(S, fn, fs, Q)
     # S = butter_bandpass_filter(S, f1, f2, fs, order_)
-
-    S = (S-S.min())/(S.max()-S.min())
+    
+    S = (S-S.mean())/S.std()
+    # S = (S-S.min())/(S.max()-S.min())
     S = S * 2 - 1
 
     return S
@@ -89,7 +90,7 @@ def hr_4rm_2ndHarmonicFourier(ppg, fs):
     fft_freqs = fftfreq(n, 1/fs)
     
     bpm_freqs = fft_freqs * 60
-    lower_bound_bpm = 240
+    lower_bound_bpm = 250
     upper_bound_bpm = 360
 
     
@@ -106,7 +107,21 @@ def hr_4rm_2ndHarmonicFourier(ppg, fs):
     
     return heart_rate
 
+def EFA(ppg, fps, sigma_bpm):
+    ppg = ppg - ppg.mean()
+    ppg = butter_bandpass_filter(ppg, 1, 3, fps, order=sigma_bpm)
+    window = np.hamming(len(ppg))
+    ppg = window*ppg
+    frequencies, psd = welch(ppg, fs=fps, window='hamming')
+    sigma = sigma_bpm / 60
+    psd = gaussian_filter1d(psd, sigma * len(psd) / (fps / 2))
+    psd = psd/psd.sum()
+    heart_rate = (psd.dot(frequencies))*60
+    
+    return heart_rate
+
 def median_analysis(signal, fps):
+    signal = signal - signal.mean()
     peaks, _ = find_peaks(signal)
     distances = np.diff(peaks)
     min_distance = 0.4 * fps
