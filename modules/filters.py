@@ -1,5 +1,6 @@
 import numpy as np
-from scipy.signal import butter, find_peaks, sosfilt, iirnotch, filtfilt, resample, lfilter
+from scipy.signal import butter, find_peaks, sosfilt, iirnotch, filtfilt, resample, lfilter, cheby2, sosfilt, sosfreqz
+
 
 def resample_signal(data, original_fs, target_fs):
     duration = len(data) / original_fs
@@ -19,6 +20,15 @@ def butter_bandpass_filter(data, lowcut, highcut, fs, order=4):
     b, a = butter_bandpass(lowcut, highcut, fs, order=order)
     y = lfilter(b, a, data)
     return y
+
+def cheby2_bandpass_filter(data, lowcut, highcut, fs, rs, order):
+    nyquist = 0.5*fs
+    low = lowcut / nyquist
+    high = highcut / nyquist
+    sos = cheby2(order, rs, [low, high], btype='bandpass', output='sos')
+    filtered_sig = sosfilt(sos, data)
+    return filtered_sig
+
 
 def butter_highpass(cutoff, fs, order=5):
     nyquist = 0.5 * fs
