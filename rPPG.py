@@ -20,8 +20,8 @@ fig, ax = plt.subplots()
 # Example 2D numpy array with 3 lines, each with 10 points
 data = np.random.rand(3, 10)
 
-channels = ["lc_ppg", "nose_ppg", "rc_ppg", "face_ppg", "head_ppg", "ulip_ppg", "llip_ppg", "comb_ppg"]
-linestyles = ["dotted", "dotted", "dotted", "dotted", "dotted", "dotted", "dotted", "dashed"]
+channels = ["nose_ppg", "rc_ppg", "face_ppg", "ulip_ppg"]
+linestyles = ["dotted", "dotted", "dotted", "dotted"]
 lines = []
 for i in range(len(channels)):
     line, = ax.plot([], [], linestyle=linestyles[i],label=channels[i])
@@ -48,8 +48,8 @@ forehead_indices = [10, 338, 297, 332, 284, 251, 389, 356, 454]
 # left_cheek_indices = left_cheek_indices[0:4] + left_cheek_indices[-3:]
 # nose_indices = nose_indices[0:4] + nose_indices[-3:]
 
-W = 15
-SW = 3
+W = 10
+SW = 5
 hr_method = rppg.median_analysis
 
 def record():
@@ -81,6 +81,10 @@ def record():
                 break
             else:
                 frames.append(frame)
+                if i%int(CAMERA_FPS)==0:
+                    cv2.imshow("Video Stream", frame)
+                    if cv2.waitKey(1) & 0xFF == ord("q"):
+                        break
         if not ret:
             break
         if cv2.waitKey(1) & 0xFF == ord("q"):
@@ -92,12 +96,9 @@ def record():
 
         ''' DETECT FACE & LANDMARKS '''
         face_frames = []
-        left_cheek = []
         right_cheek = []
         nose = []
-        head = []
         ulip = []
-        llip = []
         disp_frames = copy.deepcopy(frames)
         for f,frame in enumerate(frames):
 
@@ -128,34 +129,21 @@ def record():
                     results = face_mesh.process(rgb_frame)
                     if results.multi_face_landmarks:
                         for face_landmarks in results.multi_face_landmarks:
-
-                            roi_l = rppg.landmark_extraction(frame, face_landmarks, left_cheek_indices, width, height)
-                            
                             roi_r = rppg.landmark_extraction(frame, face_landmarks, right_cheek_indices, width, height)
-
                             roi_nose = rppg.landmark_extraction(frame, face_landmarks, nose_indices, width, height)
-
-                            roi_head = rppg.landmark_extraction(frame, face_landmarks, forehead_indices, width, height)
-
                             roi_ulip = rppg.landmark_extraction(frame, face_landmarks, upper_lip_indices, width, height)
-                        
-                            roi_llip = rppg.landmark_extraction(frame, face_landmarks, lower_lip_indices, width, height)
 
-                        left_cheek.append(roi_l)
                         right_cheek.append(roi_r)
                         nose.append(roi_nose)
-                        head.append(roi_head)
                         ulip.append(roi_ulip)
-                        llip.append(roi_llip)
                         
-            if f>=int(0.9*W*CAMERA_FPS):
+            if f>=int((W-SW)*CAMERA_FPS) and f%int(CAMERA_FPS)==0:
                 cv2.imshow("Video Stream", disp_frames[f])
                 if cv2.waitKey(1) & 0xFF == ord("q"):
                     break
 
         efs = int(W*CAMERA_FPS)
-        if len(face_frames)==efs and len(left_cheek)==efs and len(right_cheek)==efs:
-
+        if len(face_frames)==efs and len(nose)==efs and len(right_cheek)==efs and len(ulip)==efs:
             window_length_ = int(CAMERA_FPS/2)
             poly_order_ = 5
             sigma_ = 2.5
@@ -166,118 +154,74 @@ def record():
             Q = 50
             f_ord = 10
 
-            lc_ppgi = rppg.compute_landmark_ppgi(left_cheek)
             rc_ppgi = rppg.compute_landmark_ppgi(right_cheek)
             nose_ppgi = rppg.compute_landmark_ppgi(nose)
             face_ppgi = rppg.compute_landmark_ppgi(face_frames)
-            head_ppgi = rppg.compute_landmark_ppgi(head)
             ulip_ppgi = rppg.compute_landmark_ppgi(ulip)
-            llip_ppgi = rppg.compute_landmark_ppgi(llip)
 
-            lc_ppg = rppg.ppgi_2_ppg(lc_ppgi,f1,f2,fs_,f_ord,fn,Q)
             rc_ppg = rppg.ppgi_2_ppg(rc_ppgi,f1,f2,fs_,f_ord,fn,Q)
             nose_ppg = rppg.ppgi_2_ppg(nose_ppgi,f1,f2,fs_,f_ord,fn,Q)
             face_ppg = rppg.ppgi_2_ppg(face_ppgi,f1,f2,fs_,f_ord,fn,Q)
-            head_ppg = rppg.ppgi_2_ppg(head_ppgi,f1,f2,fs_,f_ord,fn,Q)
             ulip_ppg = rppg.ppgi_2_ppg(ulip_ppgi,f1,f2,fs_,f_ord,fn,Q)
-            llip_ppg = rppg.ppgi_2_ppg(llip_ppgi,f1,f2,fs_,f_ord,fn,Q)
             
-            D = 8
-            lc_ppg = np.abs(lc_ppg[int(D*CAMERA_FPS):])
+            D = 3
             rc_ppg = np.abs(rc_ppg[int(D*CAMERA_FPS):])
             nose_ppg = np.abs(nose_ppg[int(D*CAMERA_FPS):])
             face_ppg = np.abs(face_ppg[int(D*CAMERA_FPS):])
-            head_ppg = np.abs(head_ppg[int(D*CAMERA_FPS):])
             ulip_ppg = np.abs(ulip_ppg[int(D*CAMERA_FPS):])
-            llip_ppg = np.abs(llip_ppg[int(D*CAMERA_FPS):])
 
-            lc_ppg = rppg.savitzky_golay(lc_ppg, window_length_, poly_order_)
             rc_ppg = rppg.savitzky_golay(rc_ppg, window_length_, poly_order_)
             nose_ppg = rppg.savitzky_golay(nose_ppg, window_length_, poly_order_)
             face_ppg = rppg.savitzky_golay(face_ppg, window_length_, poly_order_)
-            head_ppg = rppg.savitzky_golay(head_ppg, window_length_, poly_order_)
             ulip_ppg = rppg.savitzky_golay(ulip_ppg, window_length_, poly_order_)
-            llip_ppg = rppg.savitzky_golay(llip_ppg, window_length_, poly_order_)
 
-            lc_ppg = rppg.gaussian_filter(lc_ppg, sigma_)
             rc_ppg = rppg.gaussian_filter(rc_ppg, sigma_)
             nose_ppg = rppg.gaussian_filter(nose_ppg, sigma_)
             face_ppg = rppg.gaussian_filter(face_ppg, sigma_)
-            head_ppg = rppg.gaussian_filter(head_ppg, sigma_)
             ulip_ppg = rppg.gaussian_filter(ulip_ppg, sigma_)
-            llip_ppg = rppg.gaussian_filter(llip_ppg, sigma_)
 
-            lc_ppg = rppg.min_max_sig(lc_ppg)
             rc_ppg = rppg.min_max_sig(rc_ppg)
             nose_ppg = rppg.min_max_sig(nose_ppg)
             face_ppg = rppg.min_max_sig(face_ppg)
-            head_ppg = rppg.min_max_sig(head_ppg)
             ulip_ppg = rppg.min_max_sig(ulip_ppg)
-            llip_ppg = rppg.min_max_sig(llip_ppg)
 
-            comb_ppg = np.convolve(lc_ppg,nose_ppg,mode="same")
-            comb_ppg = np.convolve(comb_ppg,rc_ppg,mode="same")
-            comb_ppg = np.convolve(comb_ppg,face_ppg,mode="same")
-            comb_ppg = np.convolve(comb_ppg,head_ppg,mode="same")
-            comb_ppg = np.convolve(comb_ppg,ulip_ppg,mode="same")
-            comb_ppg = np.convolve(comb_ppg,llip_ppg,mode="same")
-            comb_ppg = rppg.min_max_sig(comb_ppg)
-
-            l_hr = round(hr_method(lc_ppg,fs_), 2)
             r_hr = round(hr_method(rc_ppg,fs_), 2)
             nose_hr = round(hr_method(nose_ppg,fs_), 2)
             face_hr = round(hr_method(face_ppg,fs_), 2)
-            head_hr = round(hr_method(head_ppg,fs_), 2)
             ulip_hr = round(hr_method(ulip_ppg,fs_), 2)
-            llip_hr = round(hr_method(llip_ppg,fs_), 2)
-            comb_hr = round(hr_method(comb_ppg,fs_), 2)
-
-            # l_hr = round(hr_method(lc_ppg,fs_,sigma_bpm), 2)
+            
             # r_hr = round(hr_method(rc_ppg,fs_,sigma_bpm), 2)
             # nose_hr = round(hr_method(nose_ppg,fs_,sigma_bpm), 2)
             # face_hr = round(hr_method(face_ppg,fs_,sigma_bpm), 2)
-            # head_hr = round(hr_method(head_ppg,fs_,sigma_bpm), 2)
             # ulip_hr = round(hr_method(ulip_ppg,fs_,sigma_bpm), 2)
-            # llip_hr = round(hr_method(llip_ppg,fs_,sigma_bpm), 2)
-            # comb_hr = round(hr_method(comb_ppg,fs_,sigma_bpm), 2)
 
             hr_avg = round((r_hr+nose_hr+face_hr+ulip_hr)/4, 2)
             HR_estimates = HR_estimates + [1.01*r_hr, 1.0*nose_hr, 1.0*face_hr, 1.01*ulip_hr]
 
-            ppg = np.stack([lc_ppg, nose_ppg, rc_ppg, face_ppg, head_ppg, ulip_ppg, llip_ppg, comb_ppg], axis=0)
+            ppg = np.stack([nose_ppg, rc_ppg, face_ppg, ulip_ppg], axis=0)
             for i, line in enumerate(lines):
                 line.set_data(np.linspace(0,W-D,int((W-D)*CAMERA_FPS)),ppg[i, :])  # Update x and y data       
             ax.relim()
             ax.autoscale_view()
             fig.canvas.draw()
             fig.canvas.flush_events()
-            # print(f"hr_avg: {hr_avg}bpm | l_hr: {l_hr}bpm | r_hr: {r_hr}bpm  | nose_hr: {nose_hr}bpm | face_hr: {face_hr}bpm | head_hr: {head_hr}bpm | ulip_hr: {ulip_hr}bpm | llip_hr:{llip_hr}bpm | comb_hr: {comb_hr}bpm")
             if len(HR_estimates)>=1:
                 print(len(HR_estimates), HR_estimates)
-                HR_S = rppg.parzen_rosenblatt_window(HR_estimates,3)
+                HR_S = HR_estimates
+                # HR_S = rppg.parzen_rosenblatt_window(HR_estimates,3)
+                # HR_S = rppg.gaussian_kernel(HR_estimates)
+                # HR_S = rppg.hr_gaussian_window(HR_estimates, 0, 10)
                 print(len(HR_S), HR_S)
-                # HR_ = mode(HR_S)
                 HR_ = np.mean(HR_S)
                 heart_rate = HR_
                 print(f"HEART RATE: {HR_}bpm")
                 print("----------------------------------------------------------------------------------------------------------------------------------------------------")
-            if len(HR_estimates)==(int(W/SW)+1)*4:      
+            if len(HR_estimates)==(int(W/SW))*len(channels):      
                 HR_estimates = []
             # print("----------------------------------------------------------------------------------------------------------------------------------------------------")
-            
-            # hr = round(0.7*r_hr + 0.2*convG_lr_hr + 0.1*l_hr, 2)
-            # HR_estimates.append(hr)
-            # if len(HR_estimates)<2:
-            #     HR_estimates.append(hr)
-            # else:
-            #     hr = round(sum(HR_estimates[-2:] + [hr])/3, 2)
-            #     HR_estimates.append(hr)
-
-            # heart_rate = HR_estimates[-1]
-            # print(f"HEART RATE: {heart_rate}bpm | r_hr: {r_hr}bpm | convG_lr_hr: {convG_lr_hr}bpm | l_hr: {l_hr}bpm | nose_hr: {nose_hr}bpm | convG_rn_hr: {convG_rn_hr}bpm | convG_ln_hr: {convG_ln_hr}bpm")
-            # print("----------------------------------------------------------------------------------------------------------------------------------------------------")
         else:
-            pass
+            print("EFS not met")
+            print(efs, len(face_frames), len(nose), len(right_cheek), len(ulip))
         if SW < W:
             frames = frames[int(SW*CAMERA_FPS):]
         else:

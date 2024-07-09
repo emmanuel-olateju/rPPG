@@ -1,3 +1,4 @@
+import math
 import numpy as np
 from scipy.signal import savgol_filter, find_peaks, welch
 from scipy.ndimage import gaussian_filter1d
@@ -10,8 +11,9 @@ def landmark_extraction(frame, landmarks, indices, width, height):
     for idx in indices:
         x = int(landmarks.landmark[idx].x * width)
         y = int(landmarks.landmark[idx].y * height)
-        roi = frame[y,x,:]
-        roi_.append(roi)
+        if x<=width-1 and y<=height-1:
+            roi = frame[y,x,:]
+            roi_.append(roi)
     return np.array(roi_)
 
 def ppgi_2_ppg(ppgi, f1, f2, fs, order_, fn, Q):
@@ -180,15 +182,14 @@ def ibi_HR(signal, fps):
 
     return heart_rate
 
+# Gaussian kernel function
+def gaussian_kernel(x):
+    return norm.pdf(x)
 
 def parzen_rosenblatt_window(hr_values, bandwidth):
     
     n = len(hr_values)
     smoothed_hr = np.zeros(n)
-    
-    # Gaussian kernel function
-    def gaussian_kernel(x):
-        return norm.pdf(x)
     
     # Loop over each HR value
     for i in range(n):
@@ -204,3 +205,13 @@ def parzen_rosenblatt_window(hr_values, bandwidth):
     
     return smoothed_hr
     
+def hr_gaussian_window(hr_values, mu, sigma):
+
+    if isinstance(hr_values,list):
+        hr_values = np.array(hr_values)
+
+    x = hr_values
+    
+    hr_values = (1/(sigma*math.sqrt(2*math.pi))) * np.exp((-0.5*(x-mu))/sigma)
+
+    return hr_values
