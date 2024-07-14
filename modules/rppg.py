@@ -5,6 +5,7 @@ from scipy.ndimage import gaussian_filter1d
 from scipy.fft import fft, ifft, fftfreq
 from scipy.stats import norm
 from . filters import butter_bandpass_filter, apply_notch_filter, cheby2_bandpass_filter
+import cv2
 
 def landmark_extraction(frame, landmarks, indices, width, height):
     roi_ = []
@@ -24,9 +25,9 @@ def ppgi_2_ppg(ppgi, f1, f2, fs, order_, fn, Q):
     G = ppgi[:,1]/ppgi[:,1].mean()
     B = ppgi[:,0]/ppgi[:,0].mean()
     
+    R = cheby2_bandpass_filter(R, f1, f2, fs, Q, order_)
     G = cheby2_bandpass_filter(G, f1, f2, fs, Q, order_)
-    # G = butter_bandpass_filter(G, f1, f2, fs, order_)
-    # G = FFT_BPF(G, f1, f2, fs)
+    B = cheby2_bandpass_filter(B, f1, f2, fs, Q, order_)
 
 
     # X = 3*R - 2*G
@@ -36,27 +37,11 @@ def ppgi_2_ppg(ppgi, f1, f2, fs, order_, fn, Q):
     # beta = np.std(X)/np.std(Y)
     # S = X - beta*Y
 
-    S = np.log(1+G)
-
     # S = G
 
     # SGR = G/R
-    # S = SGR
 
-    # S = 0.8*S + 0.2*SGR
-
-    # S = apply_notch_filter(S, fn, fs, Q)
-    # S = butter_bandpass_filter(S, f1, f2, fs, order_)
-    # S = FFT_BPF(S, f1, f2, fs)
-    # S = butter_bandpass_filter(S, f1, f2, fs, order_)
-    # S = cheby2_bandpass_filter(S, f1, f2, fs, Q, order_)
-    # S = savitzky_golay(S, w, order_)
-    # S = FFT_BPF(S, f1, f2, fs)
-
-    
-    S = (S-S.mean())/S.std()
-    # S = (S-S.min())/(S.max()-S.min())
-    S = S * 2 - 1
+    S = np.log(1+G)
 
     return S
 
@@ -204,14 +189,42 @@ def parzen_rosenblatt_window(hr_values, bandwidth):
         smoothed_hr[i] = np.sum(weights * hr_values)
     
     return smoothed_hr
+
+def compute_histograms(frames, bins=256):
+    histograms = []
+    for frame in frames:
+        gray_frame = frame_2_grayscale(frame=frame)
+        hist, _ = np.histogram(gray_frame.ravel(), bins=bins, range=[0, 256])
+        histograms.append(hist)
+    return histograms
+
+def detect_significant_shifts(histograms, threshold=0.1):
+    shifts = []
+    for i in range(1, len(histograms)):
+        diff = np.sum(np.abs(histograms[i] - histograms[i-1]))
+        relative_diff = diff / np.sum(histograms[i-1])
+        if relative_diff > threshold:
+            shifts.append((i-1, i, relative_diff))
+    return shifts
+
+def rgb_2_grayscale(rgb):
+    r_weight = 0.2989
+    g_weight = 0.5870
+    b_weight = 0.1140
     
-def hr_gaussian_window(hr_values, mu, sigma):
-
-    if isinstance(hr_values,list):
-        hr_values = np.array(hr_values)
-
-    x = hr_values
+    # Calculate the greyscale image
+    greyscale = rgb[0] * r_weight + rgb[1] * g_weight + rgb[2] * b_weight
     
-    hr_values = (1/(sigma*math.sqrt(2*math.pi))) * np.exp((-0.5*(x-mu))/sigma)
+    return greyscale
 
-    return hr_values
+def frame_2_grayscale(frame):
+    gray = []
+    if frame.ndim==3:
+       for i in range(frame.shape[0]):
+           for j in range(frame.shape[1]):
+               gray.append(rgb_2_grayscale(frame[i,j,:]))
+    if frame.ndim==2:
+       for i in range(frame.shape[0]):
+           gray.append(rgb_2_grayscale(frame[i,:]))
+    return np.array(gray)
+        

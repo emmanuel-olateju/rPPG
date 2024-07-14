@@ -13,22 +13,22 @@ import time
 from scipy.stats import mode
 import copy
 
-# Initialize plot
-plt.ion()  # Turn on interactive mode
-fig, ax = plt.subplots()
+# # Initialize plot
+# plt.ion()  # Turn on interactive mode
+# fig, ax = plt.subplots()
 
-# Example 2D numpy array with 3 lines, each with 10 points
-data = np.random.rand(3, 10)
+# # Example 2D numpy array with 3 lines, each with 10 points
+# data = np.random.rand(3, 10)
 
 channels = ["nose_ppg", "rc_ppg", "face_ppg", "ulip_ppg"]
-linestyles = ["dotted", "dotted", "dotted", "dotted"]
-lines = []
-for i in range(len(channels)):
-    line, = ax.plot([], [], linestyle=linestyles[i],label=channels[i])
-    lines.append(line)
-ax.set_ylim(0, 3)
-ax.legend(lines, channels, loc='upper right')
-ax.grid(True)
+# linestyles = ["dotted", "dotted", "dotted", "dotted"]
+# lines = []
+# for i in range(len(channels)):
+#     line, = ax.plot([], [], linestyle=linestyles[i],label=channels[i])
+#     lines.append(line)
+# ax.set_ylim(0, 3)
+# ax.legend(lines, channels, loc='upper right')
+# ax.grid(True)
 
 with open('config.yaml', 'r') as file:
     CONFIG = yaml.safe_load(file)
@@ -102,8 +102,11 @@ def record():
         disp_frames = copy.deepcopy(frames)
         for f,frame in enumerate(frames):
 
-            height, width = CAMERA_HEIGHT, CAMERA_WIDTH
-            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            frame_ = cv2.GaussianBlur(frame, (5,5), 0)
+            # frame_ = cv2.medianBlur(frame, 7)
+            # frame_ = frame
+            height, width, _ = frame_.shape
+            rgb_frame = cv2.cvtColor(frame_, cv2.COLOR_BGR2RGB)
             face_results = face_detection.process(rgb_frame)
 
             if face_results.detections:
@@ -118,9 +121,8 @@ def record():
                         y_min = int(bboxC.ymin * height)
                         box_width = int(bboxC.width * width)
                         box_height = int(bboxC.height * height)
-                        face_frame = frame[y_min+5:(y_min+box_height)-5,x_min+5:(x_min+box_width)-5,:]
+                        face_frame = frame_[y_min+5:(y_min+box_height)-5,x_min+5:(x_min+box_width)-5,:]
                         face_frames.append(face_frame)
-                        # if f>=int((1-((SW/W)/2))*CAMERA_FPS):
                         cv2.rectangle(disp_frames[f], (x_min, y_min), (x_min + box_width, y_min + box_height), (255, 255, 255), 2)
                         text_x = x_min
                         text_y = y_min + box_height + 25
@@ -129,9 +131,9 @@ def record():
                     results = face_mesh.process(rgb_frame)
                     if results.multi_face_landmarks:
                         for face_landmarks in results.multi_face_landmarks:
-                            roi_r = rppg.landmark_extraction(frame, face_landmarks, right_cheek_indices, width, height)
-                            roi_nose = rppg.landmark_extraction(frame, face_landmarks, nose_indices, width, height)
-                            roi_ulip = rppg.landmark_extraction(frame, face_landmarks, upper_lip_indices, width, height)
+                            roi_r = rppg.landmark_extraction(frame_, face_landmarks, right_cheek_indices, width, height)
+                            roi_nose = rppg.landmark_extraction(frame_, face_landmarks, nose_indices, width, height)
+                            roi_ulip = rppg.landmark_extraction(frame_, face_landmarks, upper_lip_indices, width, height)
 
                         right_cheek.append(roi_r)
                         nose.append(roi_nose)
@@ -147,7 +149,6 @@ def record():
             window_length_ = int(CAMERA_FPS/2)
             poly_order_ = 5
             sigma_ = 2.5
-            sigma_bpm = 5
             fs_ = int(CAMERA_FPS)
             f1, f2 = 0.5, 2.5
             fn = 0.1
@@ -164,7 +165,7 @@ def record():
             face_ppg = rppg.ppgi_2_ppg(face_ppgi,f1,f2,fs_,f_ord,fn,Q)
             ulip_ppg = rppg.ppgi_2_ppg(ulip_ppgi,f1,f2,fs_,f_ord,fn,Q)
             
-            D = 3
+            D = 2
             rc_ppg = np.abs(rc_ppg[int(D*CAMERA_FPS):])
             nose_ppg = np.abs(nose_ppg[int(D*CAMERA_FPS):])
             face_ppg = np.abs(face_ppg[int(D*CAMERA_FPS):])
@@ -180,37 +181,30 @@ def record():
             face_ppg = rppg.gaussian_filter(face_ppg, sigma_)
             ulip_ppg = rppg.gaussian_filter(ulip_ppg, sigma_)
 
-            rc_ppg = rppg.min_max_sig(rc_ppg)
-            nose_ppg = rppg.min_max_sig(nose_ppg)
-            face_ppg = rppg.min_max_sig(face_ppg)
-            ulip_ppg = rppg.min_max_sig(ulip_ppg)
+            # rc_ppg = rppg.min_max_sig(rc_ppg)
+            # nose_ppg = rppg.min_max_sig(nose_ppg)
+            # face_ppg = rppg.min_max_sig(face_ppg)
+            # ulip_ppg = rppg.min_max_sig(ulip_ppg)
 
             r_hr = round(hr_method(rc_ppg,fs_), 2)
             nose_hr = round(hr_method(nose_ppg,fs_), 2)
             face_hr = round(hr_method(face_ppg,fs_), 2)
             ulip_hr = round(hr_method(ulip_ppg,fs_), 2)
-            
-            # r_hr = round(hr_method(rc_ppg,fs_,sigma_bpm), 2)
-            # nose_hr = round(hr_method(nose_ppg,fs_,sigma_bpm), 2)
-            # face_hr = round(hr_method(face_ppg,fs_,sigma_bpm), 2)
-            # ulip_hr = round(hr_method(ulip_ppg,fs_,sigma_bpm), 2)
 
             hr_avg = round((r_hr+nose_hr+face_hr+ulip_hr)/4, 2)
             HR_estimates = HR_estimates + [1.01*r_hr, 1.0*nose_hr, 1.0*face_hr, 1.01*ulip_hr]
 
-            ppg = np.stack([nose_ppg, rc_ppg, face_ppg, ulip_ppg], axis=0)
-            for i, line in enumerate(lines):
-                line.set_data(np.linspace(0,W-D,int((W-D)*CAMERA_FPS)),ppg[i, :])  # Update x and y data       
-            ax.relim()
-            ax.autoscale_view()
-            fig.canvas.draw()
-            fig.canvas.flush_events()
+            # ppg = np.stack([nose_ppg, rc_ppg, face_ppg, ulip_ppg], axis=0)
+            # for i, line in enumerate(lines):
+            #     line.set_data(np.linspace(0,W-D,int((W-D)*CAMERA_FPS)),ppg[i, :])  # Update x and y data       
+            # ax.relim()
+            # ax.autoscale_view()
+            # fig.canvas.draw()
+            # fig.canvas.flush_events()
             if len(HR_estimates)>=1:
                 print(len(HR_estimates), HR_estimates)
                 HR_S = HR_estimates
                 # HR_S = rppg.parzen_rosenblatt_window(HR_estimates,3)
-                # HR_S = rppg.gaussian_kernel(HR_estimates)
-                # HR_S = rppg.hr_gaussian_window(HR_estimates, 0, 10)
                 print(len(HR_S), HR_S)
                 HR_ = np.mean(HR_S)
                 heart_rate = HR_
@@ -218,7 +212,6 @@ def record():
                 print("----------------------------------------------------------------------------------------------------------------------------------------------------")
             if len(HR_estimates)==(int(W/SW))*len(channels):      
                 HR_estimates = []
-            # print("----------------------------------------------------------------------------------------------------------------------------------------------------")
         else:
             print("EFS not met")
             print(efs, len(face_frames), len(nose), len(right_cheek), len(ulip))
