@@ -13,22 +13,7 @@ import time
 from scipy.stats import mode
 import copy
 
-# # Initialize plot
-# plt.ion()  # Turn on interactive mode
-# fig, ax = plt.subplots()
-
-# # Example 2D numpy array with 3 lines, each with 10 points
-# data = np.random.rand(3, 10)
-
-channels = ["nose_ppg", "rc_ppg", "face_ppg", "ulip_ppg"]
-# linestyles = ["dotted", "dotted", "dotted", "dotted"]
-# lines = []
-# for i in range(len(channels)):
-#     line, = ax.plot([], [], linestyle=linestyles[i],label=channels[i])
-#     lines.append(line)
-# ax.set_ylim(0, 3)
-# ax.legend(lines, channels, loc='upper right')
-# ax.grid(True)
+channels = ["nose_ppg", "rc_ppg", "ulip_ppg"]
 
 with open('config.yaml', 'r') as file:
     CONFIG = yaml.safe_load(file)
@@ -89,10 +74,6 @@ def record():
             break
         if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
-        
-        ''' STANDARDIZE FRAMES '''
-        # frames = [(frame-frame.min())/(frame.max()-frame.min())*255 for frame in frames]
-        # frames = [frame.astype("uint8") for frame in frames]
 
         ''' DETECT FACE & LANDMARKS '''
         face_frames = []
@@ -103,8 +84,6 @@ def record():
         for f,frame in enumerate(frames):
 
             frame_ = cv2.GaussianBlur(frame, (5,5), 0)
-            # frame_ = cv2.medianBlur(frame, 7)
-            # frame_ = frame
             height, width, _ = frame_.shape
             rgb_frame = cv2.cvtColor(frame_, cv2.COLOR_BGR2RGB)
             face_results = face_detection.process(rgb_frame)
@@ -154,6 +133,13 @@ def record():
             fn = 0.1
             Q = 50
             f_ord = 10
+            
+            r_noise = rppg.area_measure_s(right_cheek)
+            n_noise = rppg.area_measure_s(nose)
+            u_noise = rppg.area_measure_s(ulip)
+            gain = np.array([r_noise, n_noise, u_noise])
+
+            print(f"NOISE:{(r_noise, n_noise, u_noise)}")
 
             rc_ppgi = rppg.compute_landmark_ppgi(right_cheek)
             nose_ppgi = rppg.compute_landmark_ppgi(nose)
@@ -181,26 +167,16 @@ def record():
             face_ppg = rppg.gaussian_filter(face_ppg, sigma_)
             ulip_ppg = rppg.gaussian_filter(ulip_ppg, sigma_)
 
-            # rc_ppg = rppg.min_max_sig(rc_ppg)
-            # nose_ppg = rppg.min_max_sig(nose_ppg)
-            # face_ppg = rppg.min_max_sig(face_ppg)
-            # ulip_ppg = rppg.min_max_sig(ulip_ppg)
-
             r_hr = round(hr_method(rc_ppg,fs_), 2)
             nose_hr = round(hr_method(nose_ppg,fs_), 2)
             face_hr = round(hr_method(face_ppg,fs_), 2)
             ulip_hr = round(hr_method(ulip_ppg,fs_), 2)
 
-            hr_avg = round((r_hr+nose_hr+face_hr+ulip_hr)/4, 2)
-            HR_estimates = HR_estimates + [1.01*r_hr, 1.0*nose_hr, 1.0*face_hr, 1.01*ulip_hr]
+            rnu_hr = np.array([r_hr, nose_hr, ulip_hr])
 
-            # ppg = np.stack([nose_ppg, rc_ppg, face_ppg, ulip_ppg], axis=0)
-            # for i, line in enumerate(lines):
-            #     line.set_data(np.linspace(0,W-D,int((W-D)*CAMERA_FPS)),ppg[i, :])  # Update x and y data       
-            # ax.relim()
-            # ax.autoscale_view()
-            # fig.canvas.draw()
-            # fig.canvas.flush_events()
+            hr_avg = round((r_hr+nose_hr+ulip_hr)/3, 2)
+            HR_estimates = HR_estimates + [rnu_hr[np.argmax(gain)]]
+
             if len(HR_estimates)>=1:
                 print(len(HR_estimates), HR_estimates)
                 HR_S = HR_estimates
@@ -208,9 +184,9 @@ def record():
                 print(len(HR_S), HR_S)
                 HR_ = np.mean(HR_S)
                 heart_rate = HR_
-                print(f"HEART RATE: {HR_}bpm")
+                print(f"HEART RATE: {HR_}bpm | {np.argmax(gain)}")
                 print("----------------------------------------------------------------------------------------------------------------------------------------------------")
-            if len(HR_estimates)==(int(W/SW))*len(channels):      
+            if len(HR_estimates)>=len(channels):      
                 HR_estimates = []
         else:
             print("EFS not met")

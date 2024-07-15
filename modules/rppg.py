@@ -4,7 +4,9 @@ from scipy.signal import savgol_filter, find_peaks, welch
 from scipy.ndimage import gaussian_filter1d
 from scipy.fft import fft, ifft, fftfreq
 from scipy.stats import norm
+from scipy.ndimage import median_filter
 from . filters import butter_bandpass_filter, apply_notch_filter, cheby2_bandpass_filter
+import colorsys
 import cv2
 
 def landmark_extraction(frame, landmarks, indices, width, height):
@@ -190,41 +192,30 @@ def parzen_rosenblatt_window(hr_values, bandwidth):
     
     return smoothed_hr
 
-def compute_histograms(frames, bins=256):
-    histograms = []
-    for frame in frames:
-        gray_frame = frame_2_grayscale(frame=frame)
-        hist, _ = np.histogram(gray_frame.ravel(), bins=bins, range=[0, 256])
-        histograms.append(hist)
-    return histograms
-
-def detect_significant_shifts(histograms, threshold=0.1):
-    shifts = []
-    for i in range(1, len(histograms)):
-        diff = np.sum(np.abs(histograms[i] - histograms[i-1]))
-        relative_diff = diff / np.sum(histograms[i-1])
-        if relative_diff > threshold:
-            shifts.append((i-1, i, relative_diff))
-    return shifts
-
-def rgb_2_grayscale(rgb):
-    r_weight = 0.2989
-    g_weight = 0.5870
-    b_weight = 0.1140
+def rgb_to_saturation(rgb_list):
+    saturation_values = []
     
-    # Calculate the greyscale image
-    greyscale = rgb[0] * r_weight + rgb[1] * g_weight + rgb[2] * b_weight
+    for rgb in rgb_list:
+        r, g, b = rgb
+        r /= 255.0
+        g /= 255.0
+        b /= 255.0
+        h, s, v = colorsys.rgb_to_hsv(r, g, b)
+        saturation_values.append(s)
     
-    return greyscale
+    return np.array(saturation_values)
 
-def frame_2_grayscale(frame):
-    gray = []
+def measure_s(frame):
     if frame.ndim==3:
-       for i in range(frame.shape[0]):
-           for j in range(frame.shape[1]):
-               gray.append(rgb_2_grayscale(frame[i,j,:]))
-    if frame.ndim==2:
-       for i in range(frame.shape[0]):
-           gray.append(rgb_2_grayscale(frame[i,:]))
-    return np.array(gray)
-        
+        frame = frame.reshape(frame.shape[0]*frame.shape[1], frame.shape[2])
+    s_values = rgb_to_saturation(frame)
+    hist, s_values = np.histogram(s_values)
+    hist = median_filter(hist,size=5)
+    hist_max = s_values[np.argmax(hist)]
+    return hist_max
+
+def area_measure_s(area):
+    s_values = []
+    for frame_ in area:
+        s_values.append(measure_s(frame_))
+    return np.array(s_values).mean()
