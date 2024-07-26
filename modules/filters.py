@@ -21,11 +21,11 @@ def butter_bandpass_filter(data, lowcut, highcut, fs, order=4):
     y = lfilter(b, a, data)
     return y
 
-def cheby2_bandpass_filter(data, lowcut, highcut, fs, rs, order):
-    nyquist = 0.5*fs
+def cheby2_bandpass_filter(data, lowcut, highcut, fs_, rs, order):
+    nyquist = 0.5*fs_
     low = lowcut / nyquist
     high = highcut / nyquist
-    sos = cheby2(order, rs, [low, high], btype='bandpass', output='sos')
+    sos = cheby2(order, rs, [lowcut, highcut], btype='bandpass', output='sos', fs=fs_)
     filtered_sig = sosfilt(sos, data)
     return filtered_sig
 

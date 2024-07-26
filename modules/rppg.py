@@ -32,18 +32,22 @@ def ppgi_2_ppg(ppgi, f1, f2, fs, order_, fn, Q):
     B = cheby2_bandpass_filter(B, f1, f2, fs, Q, order_)
 
 
-    # X = 3*R - 2*G
-    # Y = 1.5*R - G -1.5*B
-    # X = X - X.mean()
-    # Y = Y - Y.mean()
-    # beta = np.std(X)/np.std(Y)
-    # S = X - beta*Y
+    X = 3*R - 2*G
+    Y = 1.5*R - G -1.5*B
+    X = X - X.mean()
+    Y = Y - Y.mean()
+    beta = np.std(X)/np.std(Y)
+    S = X - beta*Y
 
     # S = G
 
-    # SGR = G/R
+    # S = G/R
 
-    S = np.log(1+G)
+    S = 0.6*np.log(1+G) + 0.4*S
+
+    # S = 0.2*np.convolve(np.log(1+G),S,mode="same") +0.8*np.log(1+G)
+
+    S = standardize_sig(S)
 
     return S
 
