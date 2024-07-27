@@ -108,7 +108,7 @@ def record():
         if len(right_cheek)==efs and len(nose)==efs and len(ulip)==efs:
             window_length_ = int(CAMERA_FPS/2)
             poly_order_ = 5
-            sigma_ = 2.5
+            sigma_ = 1
             fs_ = int(CAMERA_FPS)
             f1, f2 = 0.5, 2.5
             fn = 0.1
